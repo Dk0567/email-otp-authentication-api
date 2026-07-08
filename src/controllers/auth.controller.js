@@ -1,0 +1,336 @@
+const usermodel = require("../model/user.model.js");
+const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+const config = require("../config/config.js");
+const sessionModel = require("../model/session.model.js");
+const {generateOtp} = require("../utils/utils.js");
+const {getOtpHtml} = require("../utils/utils.js")
+const otpModel = require("../model/otp.model.js")
+const {sendEmail} = require("../services/email.service.js")
+
+//register function to register user
+async function register(req, res) {
+  const { username, email, password } = req.body;
+
+  const isAlreadyRegistered = await usermodel.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  if (isAlreadyRegistered) {  
+   return res.status(409).json({
+      message: "username or email Allready exists.",
+    });
+  }
+
+  const hashpassword = crypto
+    .createHash("sha256")
+    .update(password)
+    .digest("hex");
+
+  const user = await usermodel.create({
+    username,
+    email,
+    password: hashpassword,
+  });
+
+  const otp = generateOtp();
+  const html = getOtpHtml(otp);
+
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+  
+  await otpModel.create({
+  email,
+  user: user._id,
+  otpHash
+ })
+
+ // ✅ Email bhejo
+await sendEmail(
+  email,
+  "Email Verification OTP",
+  `Your OTP is ${otp}`,
+  html
+);
+
+
+  return res.status(201).json({
+    message: "user registered successfully",
+    user: {
+      username: user.username,
+      email: user.email,
+      veryfied: user.verified
+    },
+  });
+}
+
+// login function to login user
+async function login(req,res){
+  const { email, password } = req.body;
+
+  const user = await usermodel.findOne(
+    {email}
+  );
+
+  if(!user){
+    return res.status(401).json({
+      message: "Invalid email or password",
+    })}
+if(!user.verified){
+  return res.status(401).json({
+    message:"email not verified"
+  })
+}
+    const hashpassword = crypto
+    .createHash("sha256")
+    .update(password)
+    .digest("hex");
+
+      const isPasswordvalid = hashpassword === user.password;
+
+    if(!isPasswordvalid){
+      return res.status(401).json({
+        message: "Invalid email or password",
+      })}
+
+      const refreshToken = jwt.sign({ 
+        id: user._id
+      }, config.JWT_SECRET,
+        {
+          expiresIn: "7d",
+        }
+      )
+
+      const refreshTokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+      const session = await sessionModel.create({
+        user: user._id,
+        refreshTokenHash,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+      })
+
+      const accessToken = jwt.sign({
+        id: user._id,
+        sessionId: session._id}, config.JWT_SECRET,
+        {
+          expiresIn: "15m",
+        }
+      )
+
+      res.cookie("refreshtoken", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days validity
+      })
+
+      res.status(200).json({
+        message: "user login in successfully",
+        user: { 
+          username:user.username,
+          email:user.email,
+        },
+        accessToken,
+      })
+}
+
+// getme function to get user data from access token
+async function getme(req, res) {
+  const accesstoken = req.headers.authorization.split(" ")[1];
+
+  if (!accesstoken) {
+    return res.status(401).json({
+      message: "not found token",
+    });
+  }
+
+  const decoded = jwt.verify(accesstoken, config.JWT_SECRET);
+  console.log(decoded);
+
+  const user = await usermodel.findById(decoded.id);
+  res.json({ user });
+}
+
+// refresh token function
+async function refreshtoken(req, res) {
+  const refreshToken = req.cookies.refreshtoken;
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      message: "not found refresh token",
+    });
+  }
+
+  const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
+
+  const refreshTokenHash = crypto
+    .createHash("sha256")
+    .update(refreshToken)
+    .digest("hex");
+
+  const session = await sessionModel.findOne({
+    refreshTokenHash,
+    revoked: false,
+  });
+
+  if (!session) {
+    return res.status(401).json({
+      message: "Invalid refresh token",
+    });
+  }
+
+  const accessToken = jwt.sign(
+    {
+      id: decoded.id,
+    },
+    config.JWT_SECRET,
+    {
+      expiresIn: "15m",
+    },
+  );
+
+  const newRefreshToken = jwt.sign(
+    {
+      id: decoded.id,
+    },
+    config.JWT_SECRET,
+    {
+      expiresIn: "7d",
+    },
+  );
+
+  const newRefreshTokenHash = crypto
+    .createHash("sha256")
+    .update(newRefreshToken)
+    .digest("hex");
+
+  session.refreshTokenHash = newRefreshTokenHash;
+  await session.save();
+
+  res.cookie("refreshtoken", newRefreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days validity
+  });
+
+  return res.status(201).json({
+    message: "access token refreshed successfully",
+    accessToken,
+  });
+}
+
+// logout function to logout from current session
+async function logout(req, res) {
+  const refreshToken = req.cookies.refreshtoken;
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      message: "Refresh token not found",
+    });
+  }
+  const refreshTokenHash = crypto
+    .createHash("sha256")
+    .update(refreshToken)
+    .digest("hex");
+
+  const session = await sessionModel.findOne({
+    refreshTokenHash,
+    revoked: false,
+  });
+
+  //  console.log(session);
+
+  if (!session) {
+    return res.status(400).json({
+      message: "Invalid refresh token",
+    });
+  }
+
+  session.revoked = true;
+  await session.save();
+
+  res.clearCookie("refreshtoken");
+
+  res.status(200).json({
+    message: "Logout out successfully",
+  });
+}
+ 
+// logoutAll function to logout from all sessions
+async function logoutAll(req, res) {
+
+  const refreshToken = req.cookies.refreshtoken;
+
+console.log(refreshToken);
+  if(!refreshToken) {
+    return res.status(401).json({
+      message: "Refresh token not found",
+    });
+  }
+
+  const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
+
+  const userId = decoded.id;
+
+  await sessionModel.updateMany({
+    user: userId,
+    revoked:false
+  },
+    { revoked: true }
+  );
+  res.clearCookie("refreshtoken");
+
+  res.status(200).json({
+    message: "Logged out from all sessions successfully",
+  });
+
+}
+
+async function verifyEmail(req,res) {
+    const {otp , email} = req.body;
+
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    const otpDoc = await otpModel.findOne({
+      email,
+      otpHash
+    })
+
+    if(!otpDoc){
+      return res.status(401).json({
+        message:"invalid Otp" 
+      })
+    }
+
+    const user = await usermodel.findByIdAndUpdate(otpDoc.user,{
+    verified:true
+    })
+
+    await otpModel.deleteMany({
+      user:otpDoc.user
+    })
+
+    return res.status(200).json({
+      message:"Email is verified successfully",
+      user:{
+        username :user.username,
+        email:user.email,
+        verified:user.verified,
+      }
+    })
+    }
+
+
+module.exports = {
+  register,
+  login,
+  getme,
+  refreshtoken,
+  logout,
+  logoutAll,
+  verifyEmail,
+};
