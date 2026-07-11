@@ -64,6 +64,7 @@ email-otp-authentication-api/
 | POST | `/refresh-token` | Generate a new access token |
 | POST | `/logout` | Logout current session |
 | POST | `/logout-all` | Logout from all devices |
+| POST | `/Forgot Password` | Forgot Password |
 
 ---
 
@@ -71,6 +72,7 @@ email-otp-authentication-api/
 ## Security Features
 
 - Password Hashing
+- Forgot Password
 - OTP Hashing
 - Email Verification
 - JWT Authentication
@@ -79,19 +81,3 @@ email-otp-authentication-api/
 - Protected APIs
 - Environment Variables
 
----
-
-## Future Improvements
-
-- Forgot Password
-- Reset Password via OTP
-- Role-Based Authentication
-- Rate Limiting
-- Swagger API Documentation
-- Docker Support
-- Unit Testing
-- CI/CD Integration
-
----
-
-This project is developed for learning purposes and portfolio demonstration.
