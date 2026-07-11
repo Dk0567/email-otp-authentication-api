@@ -5,43 +5,43 @@ const { sendEmail } = require("../services/email.service.js");
 async function forgotPassword(req, res) {
   const { email, newPassword, confirmPassword } = req.body;
 
-  // 1. Validation
+  // Validation
   if (!email || !newPassword || !confirmPassword) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
-  // 2. User dhundo
+  // User dhundo
   const user = await usermodel.findOne({ email });
   if (!user) {
     return res.status(404).json({ message: "User not found" });
   }
 
-  // 3. Verified hai?
+  // Verified hai?
   if (!user.verified) {
     return res.status(400).json({ message: "Please verify your email first" });
   }
 
-  // 4. Password match karo
+  //Password match karo
   if (newPassword !== confirmPassword) {
     return res.status(400).json({ message: "Passwords do not match" });
   }
 
-  // 5. Password length check
+  // Password length check
   if (newPassword.length < 6) {
     return res.status(400).json({ message: "Password must be at least 6 characters" });
   }
 
-  // 6. Hash karo ✅ — same variable naam
+  //Hash karna same variable naam
   const hashpassword = crypto
     .createHash("sha256")
     .update(newPassword)
     .digest("hex");
 
-  // 7. Save karo ✅
+  //Save karna
   user.password = hashpassword;
   await user.save();
 
-  // 8. Email bhejo
+  //  Email bhejna
   await sendEmail(
     email,
     "Password Reset Successful",
