@@ -3,7 +3,7 @@ const ConnectDB = require("./db/db.js");
 const usermodel = require("./model/user.model.js");
 const authRouter = require("./routes/auth.routes.js")
 const cookieParser = require("cookie-parser");
-
+const passwordRoutes = require("./routes/passwordRoutes");
 
 // this is mongoose network connection DNS 
 const dns = require("dns");
@@ -15,5 +15,6 @@ app.use(express.json());
 ConnectDB();
 app.use(cookieParser());
 app.use("/api/auth",authRouter)
+app.use("/api/auth",passwordRoutes);
 
 module.exports = app;

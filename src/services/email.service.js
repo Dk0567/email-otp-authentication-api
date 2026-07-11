@@ -4,42 +4,79 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    type: 'OAuth2',
     user: process.env.GOOGLE_USER,
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+    pass: process.env.GOOGLE_APP_PASSWORD, // ✅ App Password
   },
 });
 
-// Verify the connection configuration
 transporter.verify((error, success) => {
   if (error) {
     console.error('Error connecting to email server:', error);
   } else {
-    console.log('Email server is ready to send messages');
+    console.log('Email server is ready to send messages ✅');
   }
 });
 
-// Function to send email
 const sendEmail = async (to, subject, text, html) => {
   try {
     const info = await transporter.sendMail({
-      from: `"Your Name" <${process.env.EMAIL_USER}>`, // sender address
-      to, // list of receivers
-      subject, // Subject line
-      text, // plain text body
-      html, // html body
+      from: `"Auth API" <${process.env.GOOGLE_USER}>`,
+      to,
+      subject,
+      text,
+      html,
     });
-
     console.log('Message sent:', info.messageId);
-    console.log('Preview URL:', nodemailer.getTestMessageUrl(info));
   } catch (error) {
     console.error('Error sending email:', error);
   }
 };
 
+module.exports = { sendEmail };
 
-module.exports = {
-    sendEmail
-};
+// require('dotenv').config();
+// const nodemailer = require('nodemailer');
+
+// const transporter = nodemailer.createTransport({
+//   service: 'gmail',
+//   auth: {
+//     type: 'OAuth2',
+//     user: process.env.GOOGLE_USER,
+//     password:process.env.GOOGLE_APP_PASSWORD,
+//     clientId: process.env.GOOGLE_CLIENT_ID,
+//     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+//     refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+//   },
+// });
+
+// // Verify the connection configuration
+// transporter.verify((error, success) => {
+//   if (error) {
+//     console.error('Error connecting to email server:', error);
+//   } else {
+//     console.log('Email server is ready to send messages');
+//   }
+// });
+
+// // Function to send email
+// const sendEmail = async (to, subject, text, html) => {
+//   try {
+//     const info = await transporter.sendMail({
+//       from: `"Your Name" <${process.env.EMAIL_USER}>`, // sender address
+//       to, // list of receivers
+//       subject, // Subject line
+//       text, // plain text body
+//       html, // html body
+//     });
+
+//     console.log('Message sent:', info.messageId);
+//     console.log('Preview URL:', nodemailer.getTestMessageUrl(info));
+//   } catch (error) {
+//     console.error('Error sending email:', error);
+//   }
+// };
+
+
+// module.exports = {
+//     sendEmail
+// };
